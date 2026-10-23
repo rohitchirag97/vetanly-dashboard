@@ -12,6 +12,7 @@ import {
   setViewMode,
 } from "@/lib/session";
 import { signOut } from "@/lib/api";
+import { useHasFeature } from "@/hooks/use-billing";
 import { NavLink, useLocation, useNavigate } from "react-router";
 import {
   BarChart3,
@@ -120,6 +121,7 @@ const AppSidebar: React.FC = () => {
     };
   }, []);
 
+  const has = useHasFeature(activeOrganizationId ?? "");
   const showModeSwitch = hasPeopleManagerRole(activeOrganizationId);
   const switchMode = (next: "admin" | "me") => {
     if (next === mode) return;
@@ -142,12 +144,12 @@ const AppSidebar: React.FC = () => {
         link("Dashboard", LayoutDashboard, "/"),
         link("Announcements", Megaphone, "/announcements"),
         group("reports", "Reports & insights", BarChart3, [
-          item("Reports", BarChart3, "/reports"),
+          has("reports") && item("Reports", BarChart3, "/reports"),
           // Muster roll, wage register, bank transfer file and statutory exports.
-          people && item("Export reports", FileDown, "/reports#export"),
-          people && item("HR insights", ChartNoAxesCombined, "/insights"),
+          has("reports") && people && item("Export reports", FileDown, "/reports#export"),
+          has("reports") && people && item("HR insights", ChartNoAxesCombined, "/insights"),
         ]),
-        ...(self ? [link("My assets", Package, "/my-assets")] : []),
+        ...(self && has("assets") ? [link("My assets", Package, "/my-assets")] : []),
       ].filter((entry): entry is NavEntry => entry !== null),
     },
     {
@@ -160,26 +162,26 @@ const AppSidebar: React.FC = () => {
           people && item("Branches", MapPin, "/branches"),
           people && item("Departments", Building2, "/departments"),
           people && item("Shifts", Clock, "/shifts"),
-          people && item("Shift roster", CalendarRange, "/shifts/roster"),
+          people && has("attendance") && item("Shift roster", CalendarRange, "/shifts/roster"),
         ]),
-        people ? link("Assets", Package, "/assets") : null,
+        people && has("assets") ? link("Assets", Package, "/assets") : null,
       ].filter((entry): entry is NavEntry => entry !== null),
     },
     {
       label: "Time",
       entries: [
-        group("attendance", "Attendance", CalendarClock, [
+        group("attendance", "Attendance", CalendarClock, has("attendance") ? [
           item("Attendance", CalendarClock, "/attendance"),
           self && item("My attendance", CalendarDays, "/attendance/my"),
           item("Corrections", ListChecks, "/attendance/corrections"),
           self && item("My schedule", CalendarDays, "/my-schedule"),
-          people && item("Overtime", Timer, "/attendance/overtime"),
+          people && has("overtime") && item("Overtime", Timer, "/attendance/overtime"),
           canManage && item("Kiosks", MonitorSmartphone, "/kiosks"),
-        ]),
+        ] : []),
         group("leave", "Leave", Plane, [
-          self && item("Apply for leave", Plane, "/leave"),
-          item("Leave applications", ListChecks, "/leave/applications"),
-          self && item("Leave log", History, "/history?tab=leave"),
+          self && has("leave") && item("Apply for leave", Plane, "/leave"),
+          has("leave") && item("Leave applications", ListChecks, "/leave/applications"),
+          self && has("leave") && item("Leave log", History, "/history?tab=leave"),
           item("Holidays", CalendarDays, "/holidays"),
         ]),
       ].filter((entry): entry is NavEntry => entry !== null),
@@ -188,15 +190,15 @@ const AppSidebar: React.FC = () => {
       label: "Money",
       entries: [
         group("payroll", "Payroll", Wallet, [
-          canManage && item("Payroll runs", Wallet, "/payroll"),
-          canManage && item("Full & final", FileCheck2, "/settlements"),
-          canManage && item("Bonus & gratuity", Gift, "/bonus"),
-          people && item("Statutory", Landmark, "/statutory"),
-          canManage && item("Accounting export", BookOpenCheck, "/accounting"),
+          canManage && has("payroll") && item("Payroll runs", Wallet, "/payroll"),
+          canManage && has("settlements") && item("Full & final", FileCheck2, "/settlements"),
+          canManage && has("bonus") && item("Bonus & gratuity", Gift, "/bonus"),
+          people && has("statutory") && item("Statutory", Landmark, "/statutory"),
+          canManage && has("accounting") && item("Accounting export", BookOpenCheck, "/accounting"),
           isOwner && item("Payroll settings", Settings2, "/payroll-settings"),
-          !canManage && self && item("Salary slips", Wallet, "/salary-slips"),
+          !canManage && self && has("payroll") && item("Salary slips", Wallet, "/salary-slips"),
         ]),
-        self
+        self && has("loans")
           ? group("loans", "Loans", HandCoins, [
               item("Loans & advances", HandCoins, "/loans"),
               canManage && item("All loans", ListChecks, "/loans/all"),
@@ -207,12 +209,12 @@ const AppSidebar: React.FC = () => {
             ])
           : null,
         group("expenses", "Expenses", ReceiptText, [
-          self && item("My expenses", ReceiptText, "/expenses"),
-          people && item("Review claims", ListChecks, "/expenses/review"),
+          self && has("expenses") && item("My expenses", ReceiptText, "/expenses"),
+          people && has("expenses") && item("Review claims", ListChecks, "/expenses/review"),
         ]),
         group("tax", "Income tax", Landmark, [
-          self && item("My tax declaration", Landmark, "/tax-declaration"),
-          people && item("Tax declarations", ListChecks, "/tax-declarations/review"),
+          self && has("statutory") && item("My tax declaration", Landmark, "/tax-declaration"),
+          people && has("statutory") && item("Tax declarations", ListChecks, "/tax-declarations/review"),
         ]),
       ].filter((entry): entry is NavEntry => entry !== null),
     },

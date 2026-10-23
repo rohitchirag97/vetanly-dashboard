@@ -71,6 +71,8 @@ export const addMonths = (date: string, months: number) => {
 
 export const dayBefore = (date: string) => new Date(Date.parse(`${date}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
 
+export type PlanFeatureOption = { key: string; label: string; requires: string[] };
+
 export type PlatformPlan = {
   id: string;
   name: string;

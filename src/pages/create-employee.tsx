@@ -8,6 +8,7 @@ import { useCreateEmployee } from "@/hooks/use-api";
 import { PHONE_COUNTRY_CODES } from "@/lib/countries";
 import { EmploymentFields } from "@/components/employment-section";
 import { TabPanel, TabLayout } from "@/components/tabs";
+import { useHasFeature } from "@/hooks/use-billing";
 import {
   emptyEmploymentValues,
   hasEmploymentValues,
@@ -57,6 +58,8 @@ const CreateEmployee: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState("basic");
   const createEmployee = useCreateEmployee();
+  const hasStatutory = useHasFeature(organizationId)("statutory");
+  const tabs = hasStatutory ? CREATE_TABS : CREATE_TABS.filter(({ id }) => id !== "statutory");
   const canAssignElevatedRole = hasManagerRole(organizationId);
 
   const handleSubmit = (event: React.SubmitEvent<HTMLFormElement>) => {
@@ -114,7 +117,7 @@ const CreateEmployee: React.FC = () => {
               employmentError = saveError instanceof Error ? saveError.message : "Request failed";
             }
           }
-          if (employeeId && JSON.stringify(statutory) !== JSON.stringify(emptyStatutoryValues)) {
+          if (employeeId && hasStatutory && JSON.stringify(statutory) !== JSON.stringify(emptyStatutoryValues)) {
             try {
               await request(`/statutory/employees/${employeeId}`, organizationId, "PUT", statutoryValuesToInput(statutory));
             } catch (saveError) {
@@ -217,7 +220,7 @@ const CreateEmployee: React.FC = () => {
         className="space-y-5 rounded-xl border bg-background p-5 shadow-sm sm:p-6"
         noValidate
       >
-        <TabLayout tabs={CREATE_TABS} active={tab} onChange={setTab}>
+        <TabLayout tabs={tabs} active={tab} onChange={setTab}>
         <TabPanel id="basic" active={tab}>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">

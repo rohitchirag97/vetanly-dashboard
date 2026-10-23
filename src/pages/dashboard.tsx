@@ -18,6 +18,7 @@ import {
 import { ErrorText } from "@/components/form-kit";
 import OnboardingChecklist from "@/components/onboarding-checklist";
 import GpsCheckIn from "@/components/gps-check-in";
+import { useHasFeature } from "@/hooks/use-billing";
 import { AdminCharts, EmployeeCharts } from "@/components/dashboard-charts";
 import { employeesQuery } from "@/hooks/use-api";
 import {
@@ -198,15 +199,16 @@ const UpcomingEvents: React.FC<{ events: UpcomingEvent[] }> = ({ events }) => {
 const localDateKey = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 
-const QuickAccess: React.FC<{ isManager: boolean; isFinanceManager: boolean }> = ({
+const QuickAccess: React.FC<{ isManager: boolean; isFinanceManager: boolean; has: (feature: string) => boolean }> = ({
   isManager,
   isFinanceManager,
+  has,
 }) => {
   const actions = [
     ...(isManager ? [{ label: "Add employee", to: "/employees/new", icon: UserPlus, tone: "bg-violet-50 text-violet-600" }] : []),
-    { label: "Apply for leave", to: "/leave", icon: Plane, tone: "bg-amber-50 text-amber-600" },
-    { label: "Attendance", to: "/attendance", icon: CalendarDays, tone: "bg-emerald-50 text-emerald-600" },
-    ...(isFinanceManager
+    ...(has("leave") ? [{ label: "Apply for leave", to: "/leave", icon: Plane, tone: "bg-amber-50 text-amber-600" }] : []),
+    ...(has("attendance") ? [{ label: "Attendance", to: "/attendance", icon: CalendarDays, tone: "bg-emerald-50 text-emerald-600" }] : []),
+    ...(isFinanceManager && has("payroll")
       ? [{ label: "Payroll", to: "/payroll", icon: Wallet, tone: "bg-sky-50 text-sky-600" }]
       : [{ label: "My profile", to: "/profile", icon: UserRound, tone: "bg-indigo-50 text-indigo-600" }]),
   ];
@@ -243,10 +245,12 @@ const Dashboard: React.FC = () => {
   const user = getUser();
   const today = React.useMemo(() => startOfToday(), []);
 
+  // Features outside the plan are not fetched (the server would refuse them) and their cards are hidden.
+  const has = useHasFeature(organizationId);
   const employees = useQuery({ ...employeesQuery(organizationId), enabled: isManager });
-  const todayLogs = useQuery(attendanceQuery(organizationId, { from: today }));
-  const loansQ = useQuery(recoverablesQuery(organizationId));
-  const leavesQ = useQuery(leaveRequestsQuery(organizationId));
+  const todayLogs = useQuery({ ...attendanceQuery(organizationId, { from: today }), enabled: !!organizationId && has("attendance") });
+  const loansQ = useQuery({ ...recoverablesQuery(organizationId), enabled: !!organizationId && has("loans") });
+  const leavesQ = useQuery({ ...leaveRequestsQuery(organizationId), enabled: !!organizationId && has("leave") });
   const holidaysQ = useQuery(holidaysQuery(organizationId));
 
   // Managers receive everyone's records; in "My view" only the user's own should count.
@@ -345,23 +349,29 @@ const Dashboard: React.FC = () => {
         <OnboardingChecklist key={organizationId} organizationId={organizationId} />
       )}
 
-      {organizationId && <GpsCheckIn key={`gps-${organizationId}`} organizationId={organizationId} />}
+      {organizationId && has("attendance") && <GpsCheckIn key={`gps-${organizationId}`} organizationId={organizationId} />}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {isManager ? (
           <>
             <StatCard label="Active employees" value={activeEmployees.toLocaleString()} to="/employees" icon={Users} tone="bg-violet-50 text-violet-600" />
-            <StatCard
-              label="Present today"
-              value={presentNow.size}
-              hint={`${seen.size} with activity today`}
-              to="/attendance"
-              icon={UserCheck}
-              tone="bg-emerald-50 text-emerald-600"
-            />
-            <StatCard label="On leave today" value={onLeaveToday} to="/history" icon={Plane} tone="bg-amber-50 text-amber-600" />
-            <StatCard label="Pending leave" value={pendingLeave} to="/leave/applications" icon={CalendarDays} tone="bg-rose-50 text-rose-600" />
-            {isFinanceManager && (
+            {has("attendance") && (
+              <StatCard
+                label="Present today"
+                value={presentNow.size}
+                hint={`${seen.size} with activity today`}
+                to="/attendance"
+                icon={UserCheck}
+                tone="bg-emerald-50 text-emerald-600"
+              />
+            )}
+            {has("leave") && (
+              <>
+                <StatCard label="On leave today" value={onLeaveToday} to="/history" icon={Plane} tone="bg-amber-50 text-amber-600" />
+                <StatCard label="Pending leave" value={pendingLeave} to="/leave/applications" icon={CalendarDays} tone="bg-rose-50 text-rose-600" />
+              </>
+            )}
+            {isFinanceManager && has("loans") && (
               <>
                 <StatCard label="Loan requests" value={pending} hint="Awaiting review" to="/loans/all" icon={HandCoins} tone="bg-sky-50 text-sky-600" />
               </>
@@ -369,17 +379,27 @@ const Dashboard: React.FC = () => {
           </>
         ) : (
           <>
-            <StatCard
-              label="Today"
-              value={presentNow.size > 0 ? "Checked in" : seen.size > 0 ? "Checked out" : "No activity"}
-              to="/attendance"
-              icon={UserCheck}
-              tone="bg-emerald-50 text-emerald-600"
-            />
-            <StatCard label="Open loans & advances" value={openLoans.length} to="/loans" icon={HandCoins} tone="bg-sky-50 text-sky-600" />
-            <StatCard label="Outstanding balance" value={outstanding.toFixed(2)} to="/loans" icon={Wallet} tone="bg-violet-50 text-violet-600" />
-            <StatCard label="Pending leave" value={pendingLeave} to="/leave" icon={Plane} tone="bg-amber-50 text-amber-600" />
-            <StatCard label="Upcoming approved leave" value={upcomingLeave} to="/history" icon={CalendarDays} tone="bg-rose-50 text-rose-600" />
+            {has("attendance") && (
+              <StatCard
+                label="Today"
+                value={presentNow.size > 0 ? "Checked in" : seen.size > 0 ? "Checked out" : "No activity"}
+                to="/attendance"
+                icon={UserCheck}
+                tone="bg-emerald-50 text-emerald-600"
+              />
+            )}
+            {has("loans") && (
+              <>
+                <StatCard label="Open loans & advances" value={openLoans.length} to="/loans" icon={HandCoins} tone="bg-sky-50 text-sky-600" />
+                <StatCard label="Outstanding balance" value={outstanding.toFixed(2)} to="/loans" icon={Wallet} tone="bg-violet-50 text-violet-600" />
+              </>
+            )}
+            {has("leave") && (
+              <>
+                <StatCard label="Pending leave" value={pendingLeave} to="/leave" icon={Plane} tone="bg-amber-50 text-amber-600" />
+                <StatCard label="Upcoming approved leave" value={upcomingLeave} to="/history" icon={CalendarDays} tone="bg-rose-50 text-rose-600" />
+              </>
+            )}
           </>
         )}
       </div>
@@ -387,35 +407,41 @@ const Dashboard: React.FC = () => {
       {isManager ? (
         <>
           <div className="grid items-stretch gap-4 xl:grid-cols-3">
-            <AdminCharts organizationId={organizationId} />
+            {has("attendance") && <AdminCharts organizationId={organizationId} />}
             <Panel title="Upcoming events" icon={CalendarDays} action={{ label: "Holidays", to: "/holidays" }}>
               <UpcomingEvents events={events} />
             </Panel>
-            <Panel title="Leave requests" icon={Plane} action={{ label: "Review", to: "/leave/applications" }}>
-              <LeaveRequests requests={leaves.data ?? []} />
-            </Panel>
+            {has("leave") && (
+              <Panel title="Leave requests" icon={Plane} action={{ label: "Review", to: "/leave/applications" }}>
+                <LeaveRequests requests={leaves.data ?? []} />
+              </Panel>
+            )}
           </div>
           <div className="grid gap-4 xl:grid-cols-2">
-            <Panel title="Recent attendance" icon={Clock3} action={{ label: "View attendance", to: "/attendance" }}>
-              <RecentAttendance logs={visibleLogs} />
-            </Panel>
+            {has("attendance") && (
+              <Panel title="Recent attendance" icon={Clock3} action={{ label: "View attendance", to: "/attendance" }}>
+                <RecentAttendance logs={visibleLogs} />
+              </Panel>
+            )}
             <Panel title="Quick access" icon={ArrowRight}>
-              <QuickAccess isManager={isManager} isFinanceManager={isFinanceManager} />
+              <QuickAccess isManager={isManager} isFinanceManager={isFinanceManager} has={has} />
             </Panel>
           </div>
         </>
       ) : (
         <>
-          {user && <EmployeeCharts organizationId={organizationId} userId={user.id} />}
+          {user && has("attendance") && <EmployeeCharts organizationId={organizationId} userId={user.id} />}
           <div className="grid gap-4 xl:grid-cols-3">
-            <Panel title="Recent attendance" icon={Clock3} action={{ label: "View attendance", to: "/attendance" }}>
-              <RecentAttendance logs={visibleLogs} />
-            </Panel>
+            {has("attendance") && (
+              <Panel title="Recent attendance" icon={Clock3} action={{ label: "View attendance", to: "/attendance" }}>
+                <RecentAttendance logs={visibleLogs} />
+              </Panel>
+            )}
             <Panel title="Upcoming events" icon={CalendarDays} action={{ label: "Holidays", to: "/holidays" }}>
               <UpcomingEvents events={events} />
             </Panel>
             <Panel title="Quick access" icon={ArrowRight}>
-              <QuickAccess isManager={isManager} isFinanceManager={isFinanceManager} />
+              <QuickAccess isManager={isManager} isFinanceManager={isFinanceManager} has={has} />
             </Panel>
           </div>
         </>

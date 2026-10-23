@@ -11,6 +11,7 @@ import EmployeeLifecycle from "@/components/employee-lifecycle";
 import EmployeeAssets from "@/components/employee-assets";
 import { getUser } from "@/lib/session";
 import { TabLayout, TabPanel } from "@/components/tabs";
+import { useHasFeature } from "@/hooks/use-billing";
 
 const EDIT_TABS = [
   { id: "account", label: "Account" },
@@ -58,6 +59,9 @@ const EmployeeEditor: React.FC<{
   const [confirmRemoval, setConfirmRemoval] = useState(false);
   const [confirmDeactivate, setConfirmDeactivate] = useState(false);
   const [reason, setReason] = useState("");
+  const has = useHasFeature(organizationId);
+  // Tabs for features outside the plan are hidden.
+  const tabs = EDIT_TABS.filter(({ id }) => !["statutory", "documents", "assets"].includes(id) || has(id));
   const update = useUpdateEmployee();
   const setActive = useSetEmployeeActive();
   const removeEmployee = useRemoveEmployee();
@@ -134,7 +138,7 @@ const EmployeeEditor: React.FC<{
         </p>
       </div>
 
-      <TabLayout tabs={EDIT_TABS} active={tab} onChange={setTab}>
+      <TabLayout tabs={tabs} active={tab} onChange={setTab}>
 
       <TabPanel id="account" active={tab}>
       <form

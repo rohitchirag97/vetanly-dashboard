@@ -9,6 +9,7 @@ import {
   type PlatformOrganizationDetail,
   type PlatformOrganizationList,
   type PlatformOverview,
+  type PlanFeatureOption,
   type PlatformPlan,
 } from "@/lib/platform";
 
@@ -57,6 +58,9 @@ export const usePlatformAudit = (page: number) =>
     queryKey: [...platformQueryKeys.audit, page],
     queryFn: () => platformApi<PlatformAuditPage>(`/audit-log?page=${page}&pageSize=50`),
   });
+
+export const usePlanFeatures = () =>
+  useQuery({ queryKey: ["platform", "plan-features"], queryFn: () => platformApi<PlanFeatureOption[]>("/plan-features"), staleTime: Infinity });
 
 export const usePlatformPlans = () =>
   useQuery({ queryKey: platformQueryKeys.plans, queryFn: () => platformApi<PlatformPlan[]>("/plans") });

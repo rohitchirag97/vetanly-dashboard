@@ -1,12 +1,19 @@
 import { useState, type FormEvent } from "react";
 import { BadgeCheck, CirclePlus, Pencil, Sparkles } from "lucide-react";
 
-import { usePlatformBillingMutation, usePlatformPlans } from "@/hooks/use-platform";
-import { BILLING_PERIODS, type BillingPeriod, type PlatformPlan } from "@/lib/platform";
+import { usePlanFeatures, usePlatformBillingMutation, usePlatformPlans } from "@/hooks/use-platform";
+import { BILLING_PERIODS, type BillingPeriod, type PlanFeatureOption, type PlatformPlan } from "@/lib/platform";
 
 const panel = "rounded-2xl border border-white/10 bg-slate-900/75 p-5";
 const field = "w-full rounded-xl border border-white/10 !bg-slate-950 px-3 py-2.5 text-sm !text-white outline-none !shadow-none placeholder:!text-slate-600 focus:border-sky-400/50";
-const features = ["Attendance", "Payroll", "Reports", "Statutory", "Overtime", "Employee documents"];
+
+/** The feature and everything it needs, following requires. */
+const withNeeds = (options: PlanFeatureOption[], key: string, seen = new Set<string>()): Set<string> => {
+  if (seen.has(key)) return seen;
+  seen.add(key);
+  options.find((option) => option.key === key)?.requires.forEach((needed) => withNeeds(options, needed, seen));
+  return seen;
+};
 type PlanDraft = {
   name: string;
   description: string;
@@ -14,11 +21,12 @@ type PlanDraft = {
   billingPeriod: BillingPeriod;
   includedEmployees: string;
   overagePrice: string;
-  features: string[];
+  /** null: every feature, for a new plan until one is unticked. */
+  features: string[] | null;
   visibility: "public" | "custom";
   isActive: boolean;
 };
-const emptyDraft: PlanDraft = { name: "", description: "", priceAmount: "0", billingPeriod: "monthly", includedEmployees: "0", overagePrice: "", features: [], visibility: "public", isActive: true };
+const emptyDraft: PlanDraft = { name: "", description: "", priceAmount: "0", billingPeriod: "monthly", includedEmployees: "0", overagePrice: "", features: null, visibility: "public", isActive: true };
 const fromPlan = (plan: PlatformPlan): PlanDraft => ({
   name: plan.name,
   description: plan.description ?? "",
@@ -33,6 +41,8 @@ const fromPlan = (plan: PlatformPlan): PlanDraft => ({
 
 export default function PlatformPlansPage() {
   const plans = usePlatformPlans();
+  const featureOptions = usePlanFeatures().data ?? [];
+  const labelOf = (key: string) => featureOptions.find((option) => option.key === key)?.label ?? key;
   const createPlan = usePlatformBillingMutation<PlanDraft, PlatformPlan>("/plans", "POST");
   const updatePlan = usePlatformBillingMutation<PlanDraft & { planId: string }, PlatformPlan>((body) => `/plans/${body.planId}`, "PATCH");
   const [draft, setDraft] = useState<PlanDraft>(emptyDraft);
@@ -43,7 +53,7 @@ export default function PlatformPlansPage() {
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setNotice("");
-    const payload: PlanDraft = { ...draft, name: draft.name.trim(), priceAmount: draft.priceAmount, includedEmployees: draft.includedEmployees, overagePrice: draft.overagePrice };
+    const payload: PlanDraft = { ...draft, features: draft.features ?? featureOptions.map((option) => option.key), name: draft.name.trim(), priceAmount: draft.priceAmount, includedEmployees: draft.includedEmployees, overagePrice: draft.overagePrice };
     try {
       if (editingId) await updatePlan.mutateAsync({ ...payload, planId: editingId });
       else await createPlan.mutateAsync(payload);
@@ -60,10 +70,14 @@ export default function PlatformPlansPage() {
     document.getElementById("plan-editor")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
-  const toggleFeature = (feature: string) => setDraft((current) => ({
-    ...current,
-    features: current.features.includes(feature) ? current.features.filter((item) => item !== feature) : [...current.features, feature],
-  }));
+  const ticked = draft.features ?? featureOptions.map((option) => option.key);
+  // Ticking a feature ticks what it needs; unticking one unticks every feature that needs it.
+  const toggleFeature = (feature: string) => {
+    const next = ticked.includes(feature)
+      ? ticked.filter((item) => !withNeeds(featureOptions, item).has(feature))
+      : [...new Set([...ticked, ...withNeeds(featureOptions, feature)])];
+    setDraft({ ...draft, features: featureOptions.map((option) => option.key).filter((key) => next.includes(key)) });
+  };
 
   return (
     <div className="space-y-6">
@@ -81,7 +95,7 @@ export default function PlatformPlansPage() {
             <label className="space-y-2 text-xs font-medium text-slate-400">Price per employee (beyond included)<input required type="number" min="0" step="0.01" value={draft.overagePrice} onChange={(event) => setDraft({ ...draft, overagePrice: event.target.value })} className={field} /></label>
             <label className="space-y-2 text-xs font-medium text-slate-400 md:col-span-2 xl:col-span-3">Description<input maxLength={500} value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} className={field} placeholder="A short summary shown to platform admins" /></label>
           </div>
-          <fieldset><legend className="text-xs font-medium text-slate-400">Included features</legend><div className="mt-2 flex flex-wrap gap-2">{features.map((feature) => <label key={feature} className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-xs transition ${draft.features.includes(feature) ? "border-sky-300/30 bg-sky-400/10 text-sky-200" : "border-white/10 bg-slate-950/50 text-slate-400 hover:border-white/20"}`}><input type="checkbox" checked={draft.features.includes(feature)} onChange={() => toggleFeature(feature)} className="accent-cyan-400" />{feature}</label>)}</div></fieldset>
+          <fieldset><legend className="text-xs font-medium text-slate-400">Included features</legend><p className="mt-1 text-xs text-slate-500">Enforced once the organization is on this plan; the free trial always has everything. A feature ticks what it needs (payroll needs attendance).</p><div className="mt-2 flex flex-wrap gap-2">{featureOptions.map((feature) => <label key={feature.key} title={feature.requires.length ? `Needs ${feature.requires.map(labelOf).join(", ")}` : undefined} className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-xs transition ${ticked.includes(feature.key) ? "border-sky-300/30 bg-sky-400/10 text-sky-200" : "border-white/10 bg-slate-950/50 text-slate-400 hover:border-white/20"}`}><input type="checkbox" checked={ticked.includes(feature.key)} onChange={() => toggleFeature(feature.key)} className="accent-cyan-400" />{feature.label}</label>)}</div></fieldset>
           <label className="inline-flex items-center gap-2 text-sm text-slate-300"><input type="checkbox" checked={draft.isActive} onChange={(event) => setDraft({ ...draft, isActive: event.target.checked })} className="accent-cyan-400" />Available for new assignments</label>
           {notice && <p role="status" className="text-sm text-emerald-300">{notice}</p>}
           {mutationError && <p role="alert" className="text-sm text-rose-300">{mutationError instanceof Error ? mutationError.message : "Could not save the plan."}</p>}
@@ -96,7 +110,7 @@ export default function PlatformPlansPage() {
             <><div className="mt-5 flex items-baseline gap-1"><span className="text-2xl font-semibold text-white">₹{Number(plan.overagePrice).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span><span className="text-xs text-slate-500">per employee / {BILLING_PERIODS[plan.billingPeriod].unit}</span></div><p className="mt-3 text-xs text-slate-400">Flat per-employee pricing</p></>
           ) : (
             <><div className="mt-5 flex items-baseline gap-1"><span className="text-2xl font-semibold text-white">₹{Number(plan.priceAmount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span><span className="text-xs text-slate-500">/{BILLING_PERIODS[plan.billingPeriod].unit}</span></div><p className="mt-3 text-xs text-slate-400">{plan.includedEmployees} included employees · ₹{Number(plan.overagePrice).toLocaleString("en-IN")}/extra employee</p></>
-          )}<div className="mt-4 flex flex-wrap gap-1.5">{plan.features.length ? plan.features.map((feature) => <span key={feature} className="rounded-md bg-slate-800 px-2 py-1 text-[10px] text-slate-300">{feature}</span>) : <span className="text-xs text-slate-600">No features selected</span>}</div></article>)}</div>
+          )}<div className="mt-4 flex flex-wrap gap-1.5">{plan.features.length ? plan.features.map((feature) => <span key={feature} className="rounded-md bg-slate-800 px-2 py-1 text-[10px] text-slate-300">{labelOf(feature)}</span>) : <span className="text-xs text-slate-600">No features selected</span>}</div></article>)}</div>
         )}
       </section>
     </div>

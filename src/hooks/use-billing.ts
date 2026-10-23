@@ -1,4 +1,4 @@
-import { queryOptions } from "@tanstack/react-query";
+import { queryOptions, useQuery } from "@tanstack/react-query";
 import { request, useOrgMutation } from "@/hooks/use-payroll-api";
 
 /** See server/src/services/billing-access.services.ts for how each state is reached. */
@@ -26,6 +26,8 @@ export type BillingStatus = {
   daysLeft: number;
   isOwner: boolean;
   planName: string | null;
+  /** Feature keys the plan unlocks (server/src/services/plan-features.ts); every one during the trial. */
+  features: string[];
   owner?: {
     billableEmployees: number;
     upgradeRequestedAt: string | null;
@@ -40,6 +42,15 @@ export const billingStatusQuery = (organizationId: string) =>
     enabled: !!organizationId,
     staleTime: 5 * 60_000,
   });
+
+/**
+ * Whether the organization's plan includes a feature. True until the status loads: this only hides
+ * menus, and the server refuses what the plan leaves out anyway.
+ */
+export const useHasFeature = (organizationId: string) => {
+  const { data } = useQuery(billingStatusQuery(organizationId));
+  return (feature: string) => !data?.features || data.features.includes(feature);
+};
 
 export const useRequestUpgrade = (organizationId: string) =>
   useOrgMutation(organizationId, [["billing-status", organizationId]], () =>
