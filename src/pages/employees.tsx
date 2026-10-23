@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router";
 import { ChevronLeft, ChevronRight, Search, Upload, UserPlus, Users, UserRoundPen } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { employeesQuery } from "@/hooks/use-api";
+import { countsAsEmployee, employeesQuery } from "@/hooks/use-api";
 import {
   getActiveOrganization,
   getActiveOrganizationId,
@@ -31,15 +31,17 @@ const Employees: React.FC = () => {
   }, []);
 
   const {
-    data: employees = [],
+    data: members = [],
     isPending,
     isError,
     error,
     refetch,
   } = useQuery({
-    ...employeesQuery(organizationId),
+    ...employeesQuery(organizationId, true),
     enabled: Boolean(organizationId),
   });
+  const employees = members.filter(countsAsEmployee);
+  const appAccessOnly = members.filter((member) => !countsAsEmployee(member));
 
   const organization = getActiveOrganization();
   const canAssignElevatedRoles = hasManagerRole(organizationId);
@@ -218,6 +220,30 @@ const Employees: React.FC = () => {
               </Button>
             </div>
           </div>
+        </div>
+      )}
+
+      {appAccessOnly.length > 0 && (
+        <div className="overflow-hidden rounded-lg border">
+          <div className="border-b px-4 py-3 text-sm text-muted-foreground">
+            App access only · admins not counted as employees
+          </div>
+          <ul className="divide-y">
+            {appAccessOnly.map((admin) => (
+              <li key={admin.id} className="flex items-center gap-3 px-4 py-3">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{admin.fname} {admin.lname}</p>
+                  <p className="text-sm text-muted-foreground">+{admin.phone}</p>
+                </div>
+                {canAssignElevatedRoles && (
+                  <Button variant="outline" size="sm" render={<Link to={`/employees/${admin.id}/edit`} />}>
+                    <UserRoundPen />
+                    Edit
+                  </Button>
+                )}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </div>

@@ -91,6 +91,7 @@ export const useCreateEmployee = () =>
       phone: string;
       role: "admin" | "hr" | "employee";
       organizationId: string;
+      includeInPayroll?: boolean;
     }) => api("/employee", { method: "POST", body: vars, auth: true }),
   });
 
@@ -139,6 +140,7 @@ export const useUpdateEmployee = () => {
       fname: string;
       lname: string;
       role: "admin" | "hr" | "employee";
+      includeInPayroll?: boolean;
     }) =>
       api(`/employee/${encodeURIComponent(vars.employeeId)}`, {
         method: "PATCH",
@@ -147,6 +149,7 @@ export const useUpdateEmployee = () => {
           fname: vars.fname,
           lname: vars.lname,
           role: vars.role,
+          includeInPayroll: vars.includeInPayroll,
         },
         auth: true,
       }),
@@ -207,15 +210,20 @@ export type Employee = {
   isActive: boolean;
   branchId?: string | null;
   branchName?: string | null;
+  includeInPayroll?: boolean;
 };
 
-export const employeesQuery = (organizationId: string) =>
+/** Admins can have app access without being counted as an employee (lists, payroll, billing). */
+export const countsAsEmployee = (employee: Employee) => employee.role !== "admin" || employee.includeInPayroll !== false;
+
+/** withAppAccessOnly also returns admins who are not counted as employees, for managing them. */
+export const employeesQuery = (organizationId: string, withAppAccessOnly = false) =>
   queryOptions({
-    queryKey: ["employees", organizationId] as const,
+    queryKey: ["employees", organizationId, ...(withAppAccessOnly ? ["all"] : [])] as const,
     queryFn: async () =>
       (
         await api<{ data: Employee[] }>(
-          `/employee?organizationId=${encodeURIComponent(organizationId)}`,
+          `/employee?organizationId=${encodeURIComponent(organizationId)}${withAppAccessOnly ? "&all=true" : ""}`,
           { auth: true },
         )
       ).data,

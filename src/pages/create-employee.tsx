@@ -46,6 +46,7 @@ const CreateEmployee: React.FC = () => {
   const [countryCode, setCountryCode] = useState("91");
   const [phone, setPhone] = useState("");
   const [role, setRole] = useState<"employee" | "admin" | "hr">("employee");
+  const [countAsEmployee, setCountAsEmployee] = useState(true);
   const [gender, setGender] = useState("");
   const [bloodGroup, setBloodGroup] = useState("");
   const [organizationId, setOrganizationId] = useState(initialOrganizationId);
@@ -92,6 +93,7 @@ const CreateEmployee: React.FC = () => {
         phone: `${countryCode}${normalizedPhone}`,
         role,
         organizationId,
+        ...(role === "admin" ? { includeInPayroll: countAsEmployee } : {}),
       },
       {
         onSuccess: async (raw) => {
@@ -326,6 +328,23 @@ const CreateEmployee: React.FC = () => {
               </select>
             ) : (
               <p className={`${inputClass} flex items-center`}>Employee</p>
+            )}
+            {role === "admin" && (
+              <label className="flex items-start gap-2 pt-1 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 accent-primary"
+                  checked={countAsEmployee}
+                  onChange={(event) => setCountAsEmployee(event.target.checked)}
+                  disabled={loading}
+                />
+                <span>
+                  Count as an employee
+                  <span className="block text-xs text-muted-foreground">
+                    Shows in the employee list, payroll and billing. Unchecked: app access only.
+                  </span>
+                </span>
+              </label>
             )}
           </div>
           <div className="space-y-1.5">

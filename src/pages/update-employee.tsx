@@ -25,6 +25,7 @@ const EDIT_TABS = [
 ];
 import {
   employeesQuery,
+  countsAsEmployee,
   useRemoveEmployee,
   useSetEmployeeActive,
   useUpdateEmployee,
@@ -49,6 +50,7 @@ const EmployeeEditor: React.FC<{
   const [role, setRole] = useState<"admin" | "hr" | "employee">(
     employee.role === "admin" ? "admin" : employee.role === "hr" ? "hr" : "employee",
   );
+  const [countAsEmployee, setCountAsEmployee] = useState(countsAsEmployee(employee));
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -79,6 +81,7 @@ const EmployeeEditor: React.FC<{
         fname: fname.trim(),
         lname: lname.trim(),
         role,
+        ...(role === "admin" ? { includeInPayroll: countAsEmployee } : {}),
       },
       {
         onSuccess: () => setSaved(true),
@@ -205,6 +208,23 @@ const EmployeeEditor: React.FC<{
             </select>
           ) : (
             <p className={`${inputClass} flex items-center`}>Employee</p>
+          )}
+          {role === "admin" && (
+            <label className="flex items-start gap-2 pt-1 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5 accent-primary"
+                checked={countAsEmployee}
+                onChange={(event) => setCountAsEmployee(event.target.checked)}
+                disabled={loading}
+              />
+              <span>
+                Count as an employee
+                <span className="block text-xs text-muted-foreground">
+                  Shows in the employee list, payroll and billing. Unchecked: app access only.
+                </span>
+              </span>
+            </label>
           )}
           <p className="text-xs text-muted-foreground">
             {canAssignElevatedRole
@@ -419,7 +439,7 @@ const UpdateEmployee: React.FC = () => {
     error,
     refetch,
   } = useQuery({
-    ...employeesQuery(organizationId),
+    ...employeesQuery(organizationId, true),
     enabled: Boolean(organizationId),
   });
 
