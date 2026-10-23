@@ -63,6 +63,8 @@ const BillingPage: React.FC = () => {
   if (!data.owner) return <ErrorText message="Only the organization owner can manage billing." />;
 
   const { owner } = data;
+  // The plan the workspace is paid on; none during the trial.
+  const currentPlan = data.paidUntil ? data.planName : null;
   const state = STATE_TEXT[data.state];
 
   return (
@@ -96,16 +98,27 @@ const BillingPage: React.FC = () => {
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold">Plans</h2>
+        <div>
+          <h2 className="text-sm font-semibold">Plans</h2>
+          <p className="text-sm text-muted-foreground">Your workspace is on one plan at a time. The others are plans you can move to.</p>
+        </div>
         {owner.plans.length === 0 ? (
           <p className="rounded-xl border p-5 text-sm text-muted-foreground">
             Pricing for your workspace will be shared with you directly. Request an upgrade and we will contact you.
           </p>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
-            {owner.plans.map((plan) => (
-              <div key={plan.id} className="rounded-xl border p-5">
-                <p className="font-semibold">{plan.name}</p>
+            {/* Plan names are unique, so the name identifies the current plan; it is listed first. */}
+            {[...owner.plans]
+              .sort((a, b) => Number(b.name === currentPlan) - Number(a.name === currentPlan))
+              .map((plan) => (
+              <div key={plan.id} className={`rounded-xl border p-5 ${plan.name === currentPlan ? "border-primary ring-1 ring-primary/30" : ""}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="font-semibold">{plan.name}</p>
+                  {plan.name === currentPlan && (
+                    <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">Current plan</span>
+                  )}
+                </div>
                 {plan.description && <p className="mt-1 text-sm text-muted-foreground">{plan.description}</p>}
                 <p className="mt-3 text-sm">{priceLine(plan)}</p>
                 <p className="mt-3 text-2xl font-semibold">
