@@ -53,13 +53,31 @@ export type PlatformOverview = {
   };
 };
 
+export type BillingPeriod = "monthly" | "annual" | "five_year";
+
+/** How each billing period reads, and how many months one period covers. */
+export const BILLING_PERIODS: Record<BillingPeriod, { label: string; unit: string; short: string; months: number }> = {
+  monthly: { label: "Monthly", unit: "month", short: "mo", months: 1 },
+  annual: { label: "Annual", unit: "year", short: "yr", months: 12 },
+  five_year: { label: "5 years", unit: "5 years", short: "5 yrs", months: 60 },
+};
+
+/** YYYY-MM-DD plus whole months; a day past the month's end clamps to its last day (Jan 31 + 1 → Feb 28). */
+export const addMonths = (date: string, months: number) => {
+  const [y, m, d] = date.split("-").map(Number);
+  const lastDay = new Date(Date.UTC(y, m + months, 0)).getUTCDate();
+  return new Date(Date.UTC(y, m - 1 + months, Math.min(d, lastDay))).toISOString().slice(0, 10);
+};
+
+export const dayBefore = (date: string) => new Date(Date.parse(`${date}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
+
 export type PlatformPlan = {
   id: string;
   name: string;
   description: string | null;
   currencyCode: string;
   priceAmount: string;
-  billingPeriod: "monthly" | "annual";
+  billingPeriod: BillingPeriod;
   includedEmployees: number;
   overagePrice: string;
   features: string[];
@@ -106,7 +124,7 @@ export type PlatformOrganizationBilling = {
     planName: string;
     priceAmount: string;
     currencyCode: string;
-    billingPeriod: "monthly" | "annual";
+    billingPeriod: BillingPeriod;
   };
   access: PlatformAccess | null;
   billableEmployees: number;

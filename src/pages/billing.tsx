@@ -2,6 +2,7 @@ import React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, CreditCard, Loader2, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { BILLING_PERIODS } from "@/lib/platform";
 import { ErrorText, Spinner } from "@/components/form-kit";
 import {
   billingStatusQuery,
@@ -40,7 +41,7 @@ const statusLine = (status: BillingStatus) => {
 };
 
 const priceLine = (plan: BillingPlan) => {
-  const period = plan.billingPeriod === "annual" ? "year" : "month";
+  const period = BILLING_PERIODS[plan.billingPeriod].unit;
   const base = Number(plan.priceAmount);
   const perEmployee = Number(plan.overagePrice);
   if (base === 0 && plan.includedEmployees === 0) {
@@ -110,7 +111,7 @@ const BillingPage: React.FC = () => {
                 <p className="mt-3 text-2xl font-semibold">
                   {formatMoney(plan.estimatedAmount, plan.currencyCode)}
                   <span className="text-sm font-normal text-muted-foreground">
-                    {" "}/ {plan.billingPeriod === "annual" ? "year" : "month"} + GST
+                    {" "}/ {BILLING_PERIODS[plan.billingPeriod].unit} + GST
                   </span>
                 </p>
                 <p className="text-xs text-muted-foreground">For your {owner.billableEmployees} active employees today</p>

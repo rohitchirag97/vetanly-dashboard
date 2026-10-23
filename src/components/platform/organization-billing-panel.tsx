@@ -3,7 +3,7 @@ import { CreditCard, FileText, MessageCircle } from "lucide-react";
 import { Link } from "react-router";
 
 import { usePlatformBillingMutation, usePlatformOrganizationBilling, usePlatformPlans } from "@/hooks/use-platform";
-import { describeAccess, type PlatformBillingProfile, type PlatformPlan } from "@/lib/platform";
+import { addMonths, BILLING_PERIODS, dayBefore, describeAccess, type PlatformBillingProfile, type PlatformPlan } from "@/lib/platform";
 
 const panel = "rounded-2xl border border-white/10 bg-slate-900/75 p-5";
 const field = "w-full rounded-xl border border-white/10 !bg-slate-950 px-3 py-2.5 text-sm !text-white outline-none !shadow-none placeholder:!text-slate-600 focus:border-sky-400/50";
@@ -76,6 +76,20 @@ export function OrganizationBillingPanel({ organizationId }: { organizationId: s
       setNotice("Plan assignment saved.");
     } catch { /* Mutation errors are displayed in this panel. */ }
   };
+  // Picking a plan or a start date fills one period's next-billing and paid-until dates; both stay editable.
+  const fillDates = (nextPlanId: string, start: string) => {
+    const plan = plans.data?.find((item: PlatformPlan) => item.id === nextPlanId);
+    if (!plan || !start) return;
+    const next = addMonths(start, BILLING_PERIODS[plan.billingPeriod].months);
+    setNextBillingAt(next);
+    setPaidUntil(dayBefore(next));
+  };
+  const choosePlan = (nextPlanId: string) => {
+    const start = startsAt || new Date(Date.now() + 330 * 60_000).toISOString().slice(0, 10); // today in India
+    setPlanId(nextPlanId);
+    setStartsAt(start);
+    fillDates(nextPlanId, start);
+  };
   const toggleOffer = (id: string) =>
     setOfferedPlanIds((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
   const saveCustomOffers = async () => {
@@ -103,9 +117,9 @@ export function OrganizationBillingPanel({ organizationId }: { organizationId: s
               <p className="mt-0.5 text-slate-400">{billing.data.billableEmployees} billable employee{billing.data.billableEmployees === 1 ? "" : "s"}</p>
             </div>
           )}
-          <label className="block space-y-2 text-xs font-medium text-slate-400">Plan<select required value={planId} onChange={(event) => setPlanId(event.target.value)} className={field}><option value="">Select a plan</option>{activePlans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name} · {Number(plan.priceAmount) === 0 && plan.includedEmployees === 0 ? `₹${Number(plan.overagePrice).toLocaleString("en-IN")}/employee` : `₹${Number(plan.priceAmount).toLocaleString("en-IN")}`}/{plan.billingPeriod === "monthly" ? "mo" : "yr"}</option>)}</select></label>
+          <label className="block space-y-2 text-xs font-medium text-slate-400">Plan<select required value={planId} onChange={(event) => choosePlan(event.target.value)} className={field}><option value="">Select a plan</option>{activePlans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name} · {Number(plan.priceAmount) === 0 && plan.includedEmployees === 0 ? `₹${Number(plan.overagePrice).toLocaleString("en-IN")}/employee` : `₹${Number(plan.priceAmount).toLocaleString("en-IN")}`}/{BILLING_PERIODS[plan.billingPeriod].short}</option>)}</select></label>
           <label className="block space-y-2 text-xs font-medium text-slate-400">Status<select value={subscriptionStatus} onChange={(event) => setSubscriptionStatus(event.target.value as typeof subscriptionStatus)} className={field}><option value="active">Active</option><option value="trial">Trial</option><option value="past_due">Past due</option><option value="cancelled">Cancelled</option></select></label>
-          <div className="grid grid-cols-2 gap-3"><label className="space-y-2 text-xs font-medium text-slate-400">Starts<input type="date" value={startsAt} onChange={(event) => setStartsAt(event.target.value)} className={field} /></label><label className="space-y-2 text-xs font-medium text-slate-400">Next billing<input type="date" value={nextBillingAt} onChange={(event) => setNextBillingAt(event.target.value)} className={field} /></label></div>
+          <div className="grid grid-cols-2 gap-3"><label className="space-y-2 text-xs font-medium text-slate-400">Starts<input type="date" value={startsAt} onChange={(event) => { setStartsAt(event.target.value); fillDates(planId, event.target.value); }} className={field} /></label><label className="space-y-2 text-xs font-medium text-slate-400">Next billing<input type="date" value={nextBillingAt} onChange={(event) => setNextBillingAt(event.target.value)} className={field} /></label></div>
           <label className="block space-y-2 text-xs font-medium text-slate-400">Paid until<input type="date" value={paidUntil} onChange={(event) => setPaidUntil(event.target.value)} className={field} /><span className="block font-normal text-slate-500">Last paid day. Full access runs through this date (India time); saving it closes any upgrade request.</span></label>
           {billing.data.subscription && <p className="text-xs text-slate-400">Current: <span className="font-medium text-slate-200">{billing.data.subscription.planName}</span> · {billing.data.subscription.status}</p>}
           {saveSubscription.isError && <p role="alert" className="text-xs text-rose-300">{saveSubscription.error instanceof Error ? saveSubscription.error.message : "Could not save plan."}</p>}
@@ -130,7 +144,7 @@ export function OrganizationBillingPanel({ organizationId }: { organizationId: s
             {customPlans.map((plan) => (
               <label key={plan.id} className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-xs transition ${offeredPlanIds.includes(plan.id) ? "border-violet-300/30 bg-violet-400/10 text-violet-200" : "border-white/10 text-slate-400 hover:border-white/20"}`}>
                 <input type="checkbox" checked={offeredPlanIds.includes(plan.id)} onChange={() => toggleOffer(plan.id)} className="accent-violet-400" />
-                {plan.name} · ₹{Number(plan.overagePrice).toLocaleString("en-IN")}/employee/{plan.billingPeriod === "monthly" ? "mo" : "yr"}
+                {plan.name} · ₹{Number(plan.overagePrice).toLocaleString("en-IN")}/employee/{BILLING_PERIODS[plan.billingPeriod].short}
               </label>
             ))}
           </div>

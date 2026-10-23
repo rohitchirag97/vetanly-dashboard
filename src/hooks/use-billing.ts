@@ -9,7 +9,7 @@ export type BillingPlan = {
   name: string;
   description: string | null;
   currencyCode: string;
-  billingPeriod: "monthly" | "annual";
+  billingPeriod: import("@/lib/platform").BillingPeriod;
   priceAmount: string;
   includedEmployees: number;
   overagePrice: string;
